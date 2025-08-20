@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="account" options="-parameters" />
+      <module name="account.main" options="-parameters" />
+      <module name="account.test" options="-parameters" />
+      <module name="auth" options="-parameters" />
+      <module name="auth.main" options="-parameters" />
+      <module name="auth.test" options="-parameters" />
+      <module name="cloud-gateway" options="-parameters" />
+      <module name="cloud-gateway.main" options="-parameters" />
+      <module name="cloud-gateway.test" options="-parameters" />
+      <module name="eureka" options="-parameters" />
+      <module name="eureka.main" options="-parameters" />
+      <module name="eureka.test" options="-parameters" />
+      <module name="transaction" options="-parameters" />
+      <module name="transaction.main" options="-parameters" />
+      <module name="transaction.test" options="-parameters" />
+    </option>
+  </component>
+</project>
