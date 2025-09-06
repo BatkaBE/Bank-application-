@@ -1,0 +1,46 @@
+@startuml Use Case Dependencies
+!theme plain
+skinparam backgroundColor #FEFEFE
+
+title Use Case Dependencies\nUse Case-үүдийн хамаарлууд
+
+usecase "UC-001\nUser Registration\nХэрэглэгч бүртгүүлэх" as UC1
+usecase "UC-002\nUser Login\nНэвтрэх" as UC2
+usecase "UC-006\nOpen Account\nДанс нээх" as UC6
+usecase "UC-008\nView Account Details\nДансны мэдээлэл харах" as UC8
+usecase "UC-011\nInternal Transfer\nДотоод шилжүүлэг" as UC11
+usecase "UC-013\nTransaction History\nГүйлгээний түүх" as UC13
+usecase "UC-016\nApply for Loan\nЗээл хүсэх" as UC16
+usecase "UC-017\nLoan Approval\nЗээл батлах" as UC17
+usecase "UC-018\nLoan Repayment\nЗээл төлөх" as UC18
+
+UC1 --> UC2 : <<include>>
+UC2 --> UC6 : <<include>>
+UC6 --> UC8 : <<include>>
+UC6 --> UC11 : <<include>>
+UC11 --> UC13 : <<include>>
+UC2 --> UC16 : <<include>>
+UC16 --> UC17 : <<include>>
+UC17 --> UC18 : <<include>>
+
+note right of UC1
+  <b>Dependency Types:</b>
+  - <b>Include:</b> Always executed
+  - <b>Extend:</b> Optional execution
+
+  <b>Dependency Chain:</b>
+  1. Registration → Login
+  2. Login → Account Operations
+  3. Account → Transactions
+  4. Login → Loan Process
+end note
+
+note as N1
+  <b>Business Flow:</b>
+  New customers must register first,
+  then login to access banking features.
+  Account operations are prerequisite
+  for transactions and loans.
+end note
+
+@enduml

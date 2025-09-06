@@ -1,0 +1,82 @@
+@startuml Customer Journey Map
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam sequenceParticipant underline
+
+title Customer Banking Journey Map\nХэрэглэгчийн банкны үйл явц
+
+|Discovery\n(Танилцах шат)|
+start
+:Visit website\n(Вэбсайтад зочлох)
+**Awareness**;
+:Learn about services\n(Үйлчилгээнүүдийг танилцах)
+**Interest**;
+:Compare with competitors\n(Бусад банкуудтай харьцуулах)
+**Consideration**;
+
+|Registration\n(Бүртгэлийн шат)|
+:Create account\n(Данс үүсгэх)
+**Registration**;
+:Verify email\n(Имэйл баталгаажуулах)
+**Onboarding**;
+:Complete profile\n(Профайл бүрэн гүйцээх)
+**Activation**;
+
+|First Use\n(Анхны ашиглалт)|
+:Login to system\n(Системд нэвтрэх)
+**First Login**;
+:Open first account\n(Эхний данс нээх)
+**Account Setup**;
+:Make first deposit\n(Анхны орлого байршуулах)
+**First Transaction**;
+:Explore features\n(Функцуудтай танилцах)
+**Learning**;
+
+|Regular Use\n(Тогтмол ашиглалт)|
+:Check balance daily\n(Өдөр бүр үлдэгдэл шалгах)
+**Monitoring**;
+:Transfer money\n(Мөнгө шилжүүлэх)
+**Transactions**;
+:Pay bills automatically\n(Төлбөр автомат төлөх)
+**Automation**;
+:View statements\n(Тайлан харах)
+**Reporting**;
+
+|Advanced Features\n(Өргөтгөсөн функц)|
+:Apply for loan\n(Зээл хүсэх)
+**Financial Growth**;
+:Invest in savings\n(Хадгаламжид хөрөнгө оруулах)
+**Investment**;
+:Set up alerts\n(Анхааруулга тохируулах)
+**Personalization**;
+:Use mobile app\n(Гар утасны апп ашиглах)
+**Mobile Banking**;
+
+|Retention\n(Үйлчлүүлэгч хадгалах)|
+:Receive personalized offers\n(Хувийн санал хүлээн авах)
+**Loyalty**;
+:Provide feedback\n(Сэтгэгдэл өгөх)
+**Engagement**;
+:Recommend to others\n(Бусдад санал болгох)
+**Advocacy**;
+
+stop
+
+note as SatisfactionMetrics
+  <b>Satisfaction Metrics:</b>
+  - <b>Discovery:</b> Website visit duration, bounce rate
+  - <b>Registration:</b> Completion rate, time to register
+  - <b>First Use:</b> Feature adoption, support tickets
+  - <b>Regular Use:</b> Transaction frequency, app usage
+  - <b>Advanced:</b> Product penetration, cross-sell ratio
+end note
+
+note as Touchpoints
+  <b>Customer Touchpoints:</b>
+  - <b>Digital:</b> Website, mobile app, email
+  - <b>Human:</b> Call center, branch visits
+  - <b>Automated:</b> SMS alerts, push notifications
+  - <b>Self-service:</b> Online banking, ATM
+end note
+
+@enduml

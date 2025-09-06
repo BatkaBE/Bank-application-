@@ -1,0 +1,274 @@
+@startuml Loan Service Sequence Diagrams
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 20
+skinparam maxmessagesize 60
+
+title Loan Service - Зээлийн үйлчилгээ
+
+' ===== LOAN APPLICATION FLOW =====
+participant "Client" as C
+participant "Loan Controller" as LC
+participant "Loan Service" as LS
+participant "Loan Repository" as LR
+participant "User Service" as US
+participant "Notification Service" as NS
+participant "Audit Service" as AS
+
+== Зээл хүсэх (Loan Application) ==
+
+C -> LC: POST /api/loans/apply
+activate LC
+
+LC -> LC: Validate request
+LC -> LS: createLoan(loanRequestDTO, request)
+activate LS
+
+LS -> LS: Validate loan data
+LS -> US: getUserById(userId)
+activate US
+US --> LS: User information
+deactivate US
+
+LS -> LS: Check eligibility
+LS -> LS: Calculate loan amount
+LS -> LR: save(loanEntity)
+activate LR
+LR --> LS: Saved loan entity
+deactivate LR
+
+LS -> NS: sendNotification(userId, "LOAN_APPLIED")
+activate NS
+NS --> LS: Notification sent
+deactivate NS
+
+LS -> AS: logAudit("LOAN_APPLIED", userId)
+activate AS
+AS --> LS: Audit logged
+deactivate AS
+
+LS --> LC: GMTResponseDTO
+deactivate LS
+
+LC --> C: HTTP 201 Created
+deactivate LC
+
+' ===== GET LOAN BY ID FLOW =====
+== Зээлийн мэдээлэл авах (Get Loan by ID) ==
+
+C -> LC: GET /api/loans/{id}
+activate LC
+
+LC -> LS: getLoanById(id)
+activate LS
+
+LS -> LR: findById(id)
+activate LR
+LR --> LS: Loan entity
+deactivate LR
+
+alt Loan found
+    LS -> LS: Convert to DTO
+    LS --> LC: GMTResponseDTO with loan data
+else Loan not found
+    LS --> LC: GMTResponseDTO with error
+end
+
+deactivate LS
+
+LC --> C: HTTP 200 OK / 404 Not Found
+deactivate LC
+
+' ===== GET ALL LOANS BY USER FLOW =====
+== Хэрэглэгчийн бүх зээлүүд (Get All Loans by User) ==
+
+C -> LC: GET /api/loans/user/{userId}
+activate LC
+
+LC -> LS: getAllLoansByUser(userId, page, size)
+activate LS
+
+LS -> LR: findByUserId(userId, pageable)
+activate LR
+LR --> LS: Page<Loan> entities
+deactivate LR
+
+LS -> LS: Convert to DTOs
+LS --> LC: GMTResponseDTO with loan list
+deactivate LS
+
+LC --> C: HTTP 200 OK
+deactivate LC
+
+' ===== LOAN APPROVAL FLOW =====
+== Зээл батлах (Loan Approval) ==
+
+C -> LC: PUT /api/loans/{id}/approve
+activate LC
+
+LC -> LC: Validate request
+LC -> LS: approveLoan(id, approvalData)
+activate LS
+
+LS -> LR: findById(id)
+activate LR
+LR --> LS: Loan entity
+deactivate LR
+
+LS -> LS: Validate loan status
+LS -> LS: Update loan status to APPROVED
+LS -> LS: Set approval date
+LS -> LR: save(loanEntity)
+activate LR
+LR --> LS: Updated loan entity
+deactivate LR
+
+LS -> NS: sendNotification(userId, "LOAN_APPROVED")
+activate NS
+NS --> LS: Notification sent
+deactivate NS
+
+LS -> AS: logAudit("LOAN_APPROVED", userId)
+activate AS
+AS --> LS: Audit logged
+deactivate AS
+
+LS --> LC: GMTResponseDTO
+deactivate LS
+
+LC --> C: HTTP 200 OK
+deactivate LC
+
+' ===== LOAN PAYMENT PROCESSING FLOW =====
+== Зээлийн төлбөр төлөх (Loan Payment Processing) ==
+
+C -> LC: POST /api/loans/{id}/payment
+activate LC
+
+LC -> LC: Validate payment request
+LC -> LS: processPayment(id, paymentData)
+activate LS
+
+LS -> LR: findById(id)
+activate LR
+LR --> LS: Loan entity
+deactivate LR
+
+LS -> LS: Validate payment amount
+LS -> LS: Calculate remaining balance
+LS -> LS: Update loan balance
+LS -> LR: save(loanEntity)
+activate LR
+LR --> LS: Updated loan entity
+deactivate LR
+
+alt Loan fully paid
+    LS -> LS: Update status to PAID
+    LS -> LR: save(loanEntity)
+    activate LR
+    LR --> LS: Final loan entity
+    deactivate LR
+end
+
+LS -> NS: sendNotification(userId, "PAYMENT_PROCESSED")
+activate NS
+NS --> LS: Notification sent
+deactivate NS
+
+LS -> AS: logAudit("PAYMENT_PROCESSED", userId)
+activate AS
+AS --> LS: Audit logged
+deactivate AS
+
+LS --> LC: GMTResponseDTO
+deactivate LS
+
+LC --> C: HTTP 200 OK
+deactivate LC
+
+' ===== LOAN REJECTION FLOW =====
+== Зээл татгалзах (Loan Rejection) ==
+
+C -> LC: PUT /api/loans/{id}/reject
+activate LC
+
+LC -> LC: Validate request
+LC -> LS: rejectLoan(id, rejectionData)
+activate LS
+
+LS -> LR: findById(id)
+activate LR
+LR --> LS: Loan entity
+deactivate LR
+
+LS -> LS: Validate loan status
+LS -> LS: Update loan status to REJECTED
+LS -> LS: Set rejection reason
+LS -> LR: save(loanEntity)
+activate LR
+LR --> LS: Updated loan entity
+deactivate LR
+
+LS -> NS: sendNotification(userId, "LOAN_REJECTED")
+activate NS
+NS --> LS: Notification sent
+deactivate NS
+
+LS -> AS: logAudit("LOAN_REJECTED", userId)
+activate AS
+AS --> LS: Audit logged
+deactivate AS
+
+LS --> LC: GMTResponseDTO
+deactivate LS
+
+LC --> C: HTTP 200 OK
+deactivate LC
+
+' ===== ERROR HANDLING FLOW =====
+== Алдааны боловсруулалт (Error Handling) ==
+
+C -> LC: POST /api/loans/apply
+activate LC
+
+LC -> LC: Validate request
+alt Invalid request data
+    LC --> C: HTTP 400 Bad Request
+    deactivate LC
+else Valid request
+    LC -> LS: createLoan(loanRequestDTO, request)
+    activate LS
+    
+    LS -> LS: Validate loan data
+    alt Validation error
+        LS --> LC: GMTValidationException
+        deactivate LS
+        LC --> C: HTTP 400 Bad Request
+        deactivate LC
+    else Business logic error
+        LS -> US: getUserById(userId)
+        activate US
+        US --> LS: User not found
+        deactivate US
+        
+        LS --> LC: GMTBusinessException
+        deactivate LS
+        LC --> C: HTTP 404 Not Found
+        deactivate LC
+    else System error
+        LS -> LR: save(loanEntity)
+        activate LR
+        LR --> LS: Database error
+        deactivate LR
+        
+        LS --> LC: GMTCustomException
+        deactivate LS
+        LC --> C: HTTP 500 Internal Server Error
+        deactivate LC
+    end
+end
+
+@enduml
+

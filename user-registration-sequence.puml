@@ -1,0 +1,59 @@
+@startuml User Registration Sequence
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam sequenceParticipant underline
+
+title User Registration Process\nХэрэглэгч бүртгүүлэх үйл явц
+
+actor "Customer\nХэрэглэгч" as CU
+participant "Frontend\nВеб интерфэйс" as FE
+participant "Auth Service\nНэвтрэлтийн үйлчилгээ" as AS
+participant "Database\nӨгөгдлийн сан" as DB
+participant "Notification Service\nМэдэгдлийн үйлчилгээ" as NS
+
+== Main Success Scenario ==
+CU -> FE: Fill registration form\n(Бүртгэлийн маягт бөглөх)
+activate FE
+FE -> AS: POST /api/v1/auth/register\n(Бүртгэлийн хүсэлт илгээх)
+activate AS
+AS -> DB: Check email uniqueness\n(Имэйл давхцалгүй эсэх шалгах)
+activate DB
+DB --> AS: Email available\n(Имэйл боломжтой)
+deactivate DB
+AS -> DB: Create user record\n(Хэрэглэгчийн бүртгэл үүсгэх)
+activate DB
+DB --> AS: User created successfully\n(Хэрэглэгч амжилттай үүсгэгдлээ)
+deactivate DB
+AS -> NS: Send verification email\n(Баталгаажуулалтын имэйл илгээх)
+activate NS
+NS --> AS: Email sent successfully\n(Имэйл амжилттай илгээгдлээ)
+deactivate NS
+AS --> FE: Registration successful\n(Бүртгэл амжилттай)
+deactivate AS
+FE --> CU: Show success message\n(Амжилтын мэдээлэл харуулах)
+deactivate FE
+
+== Alternative Flow: Email Already Exists ==
+CU -> FE: Fill registration form
+FE -> AS: POST /api/v1/auth/register
+AS -> DB: Check email uniqueness
+DB --> AS: Email already exists\n(Имэйл аль хэдийн бүртгэгдсэн)
+AS --> FE: Error: Email already registered\n(Алдаа: Имэйл бүртгэгдсэн)
+FE --> CU: Show error message\n(Алдааны мэдээлэл харуулах)
+
+== Alternative Flow: Invalid Password ==
+CU -> FE: Fill registration form with weak password
+FE -> AS: POST /api/v1/auth/register
+AS -> AS: Validate password strength\n(Нууц үгийн хүчин чадал шалгах)
+AS --> FE: Error: Password too weak\n(Алдаа: Нууц үг хүчин чадал муу)
+FE --> CU: Show password requirements\n(Нууц үгийн шаардлага харуулах)
+
+note over CU, NS
+  <b>Business Rules:</b>
+  - Email must be unique
+  - Password: 8+ chars, upper/lower case, numbers, symbols
+  - Email verification required
+  - Account initially inactive
+end note
+
+@enduml

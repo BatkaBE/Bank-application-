@@ -1,0 +1,68 @@
+@startuml Account States
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam state {
+    BackgroundColor #FEFEFE
+    BorderColor #000000
+    FontColor #000000
+}
+
+title Account State Diagram\nДансны төлөв диаграм
+
+[*] --> Creating : Account creation initiated\nДанс үүсгэх үйл явц эхэллээ
+
+state Creating as "Creating\nҮүсгэж байна" as C
+C --> Active : Account successfully created\nДанс амжилттай үүсгэгдлээ
+C --> [*] : Creation failed\nҮүсгэх үйл явц амжилтгүй боллоо
+
+state Active as "Active\nИдэвхтэй" as A
+A --> Suspended : Suspicious activity detected\nСэжигтэй үйл явдал илэрлээ
+A --> Closed : Customer requested closure\nХэрэглэгч хаах хүсэлт гаргалаа
+A --> Frozen : Legal hold\nХууль эрх зүйн шалтгаан
+
+state Suspended as "Suspended\nТүр хаагдсан" as S
+S --> Active : Issue resolved\nАсуудал шийдэгдлээ
+S --> Closed : Compliance violation\nДүрэм зөрчсөн
+S --> Frozen : Legal escalation\nХууль эрх зүйн эрсдэл нэмэгдлээ
+
+state Frozen as "Frozen\nХөлджүүлсэн" as F
+F --> Active : Legal hold released\nХууль эрх зүйн хязгаарлалт ариллаа
+F --> Closed : Court order\nШүүхийн шийдвэр
+
+state Closed as "Closed\nХаагдсан" as CL
+CL --> [*] : Account permanently closed\nДанс бүрмөсөн хаагдлаа
+
+note right of A
+  <b>Active State:</b>
+  - Full transaction capability
+  - Balance inquiries allowed
+  - Transfer operations enabled
+  - Online banking access
+end note
+
+note right of S
+  <b>Suspended State:</b>
+  - Read-only access
+  - No transaction operations
+  - Limited functionality
+  - Investigation in progress
+end note
+
+note right of F
+  <b>Frozen State:</b>
+  - No access allowed
+  - Legal investigation
+  - Court order required
+  - Complete lockdown
+end note
+
+note as TransitionRules
+  <b>State Transition Rules:</b>
+  - Creating → Active: Automatic on success
+  - Active → Suspended: Security trigger
+  - Suspended → Closed: Policy violation
+  - Any state → Frozen: Legal action
+  - Frozen/Closed → Active: Rare, requires approval
+end note
+
+@enduml

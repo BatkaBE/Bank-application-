@@ -1,0 +1,450 @@
+@startuml Transaction Service Sequence Diagrams
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 20
+skinparam maxmessagesize 60
+
+title Transaction Service - Гүйлгээний үйлчилгээ
+
+' ===== TRANSFER FLOW =====
+participant "Client" as C
+participant "Transaction Controller" as TC
+participant "Transaction Service" as TS
+participant "Transaction Repository" as TR
+participant "Account Service" as AS
+participant "Notification Service" as NS
+participant "Audit Service" as AUDIT
+participant "Database" as DB
+
+== Гүйлгээ хийх (Process Transfer) ==
+
+C -> TC: POST /api/transactions
+activate TC
+
+TC -> TC: Validate request
+TC -> TC: Log transaction.init
+TC -> TS: processTransfer(transactionDTO, request)
+activate TS
+
+TS -> TS: Validate transaction data
+TS -> TS: Check account balances
+TS -> TS: Validate transaction limits
+TS -> TS: Calculate fees
+
+TS -> AS: debitAccount(fromAccount, amount + fee)
+activate AS
+AS -> AS: Check sufficient balance
+AS -> AS: Update account balance
+AS --> TS: Account updated
+deactivate AS
+
+TS -> AS: creditAccount(toAccount, amount)
+activate AS
+AS -> AS: Update account balance
+AS --> TS: Account updated
+deactivate AS
+
+TS -> TS: Create transaction entity
+TS -> TR: save(transactionEntity)
+activate TR
+TR -> DB: INSERT INTO transaction (...)
+activate DB
+DB --> TR: transaction saved
+deactivate DB
+TR --> TS: Saved transaction entity
+deactivate TR
+
+TS -> NS: sendNotification(fromUserId, "TRANSFER_DEBITED")
+activate NS
+NS --> TS: Notification sent
+deactivate NS
+
+TS -> NS: sendNotification(toUserId, "TRANSFER_CREDITED")
+activate NS
+NS --> TS: Notification sent
+deactivate NS
+
+TS -> AUDIT: logAudit("TRANSFER_COMPLETED", transactionId)
+activate AUDIT
+AUDIT --> TS: Audit logged
+deactivate AUDIT
+
+TS --> TC: GMTResponseDTO
+deactivate TS
+
+TC -> TC: Log transaction.end
+TC --> C: GMTResponseDTO
+deactivate TC
+
+' ===== INTER-BANK TRANSFER FLOW =====
+== Банк хоорондын гүйлгээ (Inter-Bank Transfer) ==
+
+C -> TC: POST /api/transactions/inter-bank
+activate TC
+
+TC -> TC: Validate request
+TC -> TC: Log interBankTransfer.init
+TC -> TS: processInterBankTransfer(interBankDTO, request)
+activate TS
+
+TS -> TS: Validate inter-bank data
+TS -> TS: Check SWIFT/BIC codes
+TS -> TS: Validate currency conversion
+TS -> TS: Calculate international fees
+
+TS -> AS: debitAccount(fromAccount, amount + internationalFee)
+activate AS
+AS -> AS: Check sufficient balance
+AS -> AS: Update account balance
+AS --> TS: Account updated
+deactivate AS
+
+TS -> TS: Create inter-bank transaction
+TS -> TR: save(interBankTransaction)
+activate TR
+TR -> DB: INSERT INTO transaction (...)
+activate DB
+DB --> TR: transaction saved
+deactivate DB
+TR --> TS: Saved transaction entity
+deactivate TR
+
+TS -> TS: Send to external bank system
+TS -> TS: Set status to PENDING
+
+TS -> NS: sendNotification(fromUserId, "INTERBANK_INITIATED")
+activate NS
+NS --> TS: Notification sent
+deactivate NS
+
+TS -> AUDIT: logAudit("INTERBANK_INITIATED", transactionId)
+activate AUDIT
+AUDIT --> TS: Audit logged
+deactivate AUDIT
+
+TS --> TC: GMTResponseDTO
+deactivate TS
+
+TC -> TC: Log interBankTransfer.end
+TC --> C: GMTResponseDTO
+deactivate TC
+
+' ===== INTER-BANK STATUS UPDATE FLOW =====
+== Банк хоорондын гүйлгээний төлөв шинэчлэх (Update Inter-Bank Status) ==
+
+C -> TC: PUT /api/transactions/inter-bank/{transactionId}/status
+activate TC
+
+TC -> TC: Validate request
+TC -> TC: Log updateStatus.init
+TC -> TS: updateInterBankTransactionStatus(transactionId, status, externalRef, failureReason, request)
+activate TS
+
+TS -> TR: findByTransactionId(transactionId)
+activate TR
+TR -> DB: SELECT * FROM transaction WHERE transaction_id = ?
+activate DB
+DB --> TR: transaction data
+deactivate DB
+TR --> TS: Transaction entity
+deactivate TR
+
+TS -> TS: Validate status transition
+TS -> TS: Update transaction status
+TS -> TS: Set external reference
+TS -> TS: Set failure reason if failed
+
+alt Status = COMPLETED
+    TS -> AS: creditAccount(toAccount, amount)
+    activate AS
+    AS -> AS: Update account balance
+    AS --> TS: Account updated
+    deactivate AS
+    
+    TS -> NS: sendNotification(toUserId, "INTERBANK_COMPLETED")
+    activate NS
+    NS --> TS: Notification sent
+    deactivate NS
+    
+else Status = FAILED
+    TS -> AS: creditAccount(fromAccount, amount + internationalFee)
+    activate AS
+    AS -> AS: Reverse the debit
+    AS --> TS: Account updated
+    deactivate AS
+    
+    TS -> NS: sendNotification(fromUserId, "INTERBANK_FAILED")
+    activate NS
+    NS --> TS: Notification sent
+    deactivate NS
+end
+
+TS -> TR: save(updatedTransaction)
+activate TR
+TR -> DB: UPDATE transaction SET status=?, external_reference=?, failure_reason=? WHERE id=?
+activate DB
+DB --> TR: transaction updated
+deactivate DB
+TR --> TS: Updated transaction entity
+deactivate TR
+
+TS -> AUDIT: logAudit("INTERBANK_STATUS_UPDATED", transactionId)
+activate AUDIT
+AUDIT --> TS: Audit logged
+deactivate AUDIT
+
+TS --> TC: GMTResponseDTO
+deactivate TS
+
+TC -> TC: Log updateStatus.end
+TC --> C: GMTResponseDTO
+deactivate TC
+
+' ===== DEPOSIT FLOW =====
+== Хадгаламж хийх (Process Deposit) ==
+
+C -> TC: POST /api/transactions/deposit
+activate TC
+
+TC -> TC: Validate request
+TC -> TC: Log deposit.init
+TC -> TS: processDeposit(depositDTO, request)
+activate TS
+
+TS -> TS: Validate deposit data
+TS -> TS: Check account existence
+TS -> TS: Validate deposit amount
+TS -> TS: Calculate deposit fees
+
+TS -> AS: creditAccount(toAccount, amount - depositFee)
+activate AS
+AS -> AS: Update account balance
+AS --> TS: Account updated
+deactivate AS
+
+TS -> TS: Create deposit transaction
+TS -> TR: save(depositTransaction)
+activate TR
+TR -> DB: INSERT INTO transaction (...)
+activate DB
+DB --> TR: transaction saved
+deactivate DB
+TR --> TS: Saved transaction entity
+deactivate TR
+
+TS -> NS: sendNotification(toUserId, "DEPOSIT_COMPLETED")
+activate NS
+NS --> TS: Notification sent
+deactivate NS
+
+TS -> AUDIT: logAudit("DEPOSIT_COMPLETED", transactionId)
+activate AUDIT
+AUDIT --> TS: Audit logged
+deactivate AUDIT
+
+TS --> TC: GMTResponseDTO
+deactivate TS
+
+TC -> TC: Log deposit.end
+TC --> C: GMTResponseDTO
+deactivate TC
+
+' ===== GET TRANSACTION BY ID FLOW =====
+== Гүйлгээний мэдээлэл авах (Get Transaction by ID) ==
+
+C -> TC: GET /api/transactions/{transactionId}
+activate TC
+
+TC -> TS: getTransactionByTransactionId(transactionId, request)
+activate TS
+
+TS -> TR: findByTransactionId(transactionId)
+activate TR
+TR -> DB: SELECT * FROM transaction WHERE transaction_id = ?
+activate DB
+DB --> TR: transaction data
+deactivate DB
+TR --> TS: Transaction entity
+deactivate TR
+
+alt Transaction found
+    TS -> TS: Convert to DTO
+    TS --> TC: GMTResponseDTO with transaction data
+else Transaction not found
+    TS --> TC: GMTResponseDTO with error
+end
+
+deactivate TS
+
+TC --> C: GMTResponseDTO
+deactivate TC
+
+' ===== GET TRANSACTIONS BY USER FLOW =====
+== Хэрэглэгчийн гүйлгээнүүд (Get Transactions by User) ==
+
+C -> TC: GET /api/transactions/user/{userId}
+activate TC
+
+TC -> TS: getAllTransactionsByUser(userId, request)
+activate TS
+
+TS -> TR: findByUserId(userId)
+activate TR
+TR -> DB: SELECT * FROM transaction WHERE from_user_id = ? OR to_user_id = ? ORDER BY created_at DESC
+activate DB
+DB --> TR: list of transactions
+deactivate DB
+TR --> TS: List<Transaction> entities
+deactivate TR
+
+TS -> TS: Convert to DTOs
+TS --> TC: GMTResponseDTO with transaction list
+deactivate TS
+
+TC --> C: GMTResponseDTO
+deactivate TC
+
+' ===== TRANSACTION STATUS UPDATE FLOW =====
+== Гүйлгээний төлөв шинэчлэх (Update Transaction Status) ==
+
+C -> TC: PUT /api/transactions/{transactionId}/status
+activate TC
+
+TC -> TS: updateTransactionStatus(transactionId, status, updatedBy, failureReason, request)
+activate TS
+
+TS -> TR: findByTransactionId(transactionId)
+activate TR
+TR -> DB: SELECT * FROM transaction WHERE transaction_id = ?
+activate DB
+DB --> TR: transaction data
+deactivate DB
+TR --> TS: Transaction entity
+deactivate TR
+
+TS -> TS: Validate status transition
+TS -> TS: Update transaction status
+TS -> TS: Set updated timestamp
+TS -> TS: Set failure reason if failed
+
+TS -> TR: save(updatedTransaction)
+activate TR
+TR -> DB: UPDATE transaction SET status=?, updated_at=?, failure_reason=? WHERE id=?
+activate DB
+DB --> TR: transaction updated
+deactivate DB
+TR --> TS: Updated transaction entity
+deactivate TR
+
+TS -> NS: sendNotification(userId, "TRANSACTION_STATUS_UPDATED")
+activate NS
+NS --> TS: Notification sent
+deactivate NS
+
+TS -> AUDIT: logAudit("TRANSACTION_STATUS_UPDATED", transactionId)
+activate AUDIT
+AUDIT --> TS: Audit logged
+deactivate AUDIT
+
+TS --> TC: GMTResponseDTO
+deactivate TS
+
+TC --> C: GMTResponseDTO
+deactivate TC
+
+' ===== TRANSACTION CANCELLATION FLOW =====
+== Гүйлгээ цуцлах (Cancel Transaction) ==
+
+C -> TC: PUT /api/transactions/{transactionId}/cancel
+activate TC
+
+TC -> TS: cancelTransaction(transactionId, cancelledBy, reason, request)
+activate TS
+
+TS -> TR: findByTransactionId(transactionId)
+activate TR
+TR -> DB: SELECT * FROM transaction WHERE transaction_id = ?
+activate DB
+DB --> TR: transaction data
+deactivate DB
+TR --> TS: Transaction entity
+deactivate TR
+
+TS -> TS: Validate cancellation rules
+TS -> TS: Check if transaction can be cancelled
+
+alt Transaction can be cancelled
+    TS -> AS: reverseTransaction(fromAccount, toAccount, amount, fee)
+    activate AS
+    AS -> AS: Reverse account changes
+    AS --> TS: Accounts reversed
+    deactivate AS
+    
+    TS -> TS: Update transaction status to CANCELLED
+    TS -> TS: Set cancellation reason
+    TS -> TR: save(cancelledTransaction)
+    activate TR
+    TR -> DB: UPDATE transaction SET status=?, failure_reason=? WHERE id=?
+    activate DB
+    DB --> TR: transaction updated
+    deactivate DB
+    TR --> TS: Updated transaction entity
+    deactivate TR
+    
+    TS -> NS: sendNotification(fromUserId, "TRANSACTION_CANCELLED")
+    activate NS
+    NS --> TS: Notification sent
+    deactivate NS
+    
+    TS -> NS: sendNotification(toUserId, "TRANSACTION_CANCELLED")
+    activate NS
+    NS --> TS: Notification sent
+    deactivate NS
+    
+    TS -> AUDIT: logAudit("TRANSACTION_CANCELLED", transactionId)
+    activate AUDIT
+    AUDIT --> TS: Audit logged
+    deactivate AUDIT
+    
+    TS --> TC: GMTResponseDTO
+else Transaction cannot be cancelled
+    TS --> TC: GMTResponseDTO with error
+end
+
+deactivate TS
+
+TC --> C: GMTResponseDTO
+deactivate TC
+
+' ===== ERROR HANDLING FLOW =====
+== Алдааны боловсруулалт (Error Handling) ==
+
+C -> TC: Any API call
+activate TC
+
+TC -> TS: Service method call
+activate TS
+
+TS -> TS: Business logic processing
+
+alt Validation Error
+    TS --> TC: GMTValidationException
+else Business Error
+    TS --> TC: GMTBusinessException
+else RMI Error
+    TS --> TC: GMTRMIException
+else Runtime Error
+    TS --> TC: GMTRuntimeException
+else Custom Error
+    TS --> TC: GMTCustomException
+end
+
+deactivate TS
+
+TC -> TC: Create appropriate error response
+TC --> C: GMTResponseDTO with error details
+deactivate TC
+
+@enduml

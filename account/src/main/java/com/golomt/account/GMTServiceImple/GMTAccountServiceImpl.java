@@ -40,6 +40,7 @@ public class GMTAccountServiceImpl implements GMTAccountService {
 
     @Inject
     private GMTAccountRepository accountRepository;
+
     @Override
     public GMTResponseDTO createAccount(GMTAccountRequestDTO dto, HttpServletRequest req) throws GMTCustomException {
         GMTLOGUtilities.info(GMTLog.ACCOUNT.getValue(), "[service][account.createAccount][" + dto.getAccountType() + "][init]");
@@ -89,11 +90,9 @@ public class GMTAccountServiceImpl implements GMTAccountService {
 
         if (dto.getBalance() != null && dto.getBalance() > 0) {
             if (dto.isSystemcreated()) {
-                // System created account - add balance directly
                 savedAccount.setBalance(dto.getBalance());
                 savedAccount = accountRepository.save(savedAccount);
             } else if (dto.getFromAccountNumber() != null && !dto.getFromAccountNumber().trim().isEmpty()) {
-                // Transfer from existing account
                 try {
                     double fromBalance = GMTHelper.getAccountBalanceByAccountNumber(dto.getFromAccountNumber(), req);
                     if (fromBalance < dto.getBalance()) {
@@ -102,7 +101,6 @@ public class GMTAccountServiceImpl implements GMTAccountService {
 
                     savedAccount = accountRepository.save(savedAccount);
 
-                    // Adjust balance directly using account numbers
                     GMTHelper.adjustAccountBalanceByAccountNumber(dto.getFromAccountNumber(), -dto.getBalance(), req);
                     GMTHelper.adjustAccountBalanceByAccountNumber(savedAccount.getAccountNumber(), dto.getBalance(), req);
 
@@ -116,7 +114,6 @@ public class GMTAccountServiceImpl implements GMTAccountService {
                     throw new GMTCustomException("Эх данснаас мөнгө шилжүүлэхэд алдаа гарлаа: " + e.getMessage());
                 }
             } else {
-                // No funding account specified - set balance directly
                 savedAccount.setBalance(dto.getBalance());
                 savedAccount = accountRepository.save(savedAccount);
             }

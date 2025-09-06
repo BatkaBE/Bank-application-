@@ -1,0 +1,443 @@
+@startuml Auth Service Sequence Diagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 20
+skinparam maxmessagesize 60
+
+title Auth Service - System Architecture Sequence Diagram
+
+participant "Client" as C
+participant "GMTAuthController" as CTL
+participant "GMTAuthService" as SVC
+participant "GMTAuthServiceImple" as SVC_IMPL
+participant "GMTAuthRepository" as REPO
+participant "GMTUserEntity" as USER_ENTITY
+participant "Database" as DB
+participant "GMTLOGUtilities" as LOG
+participant "GMTMapper" as MAPPER
+participant "JWTService" as JWT_SVC
+participant "PasswordEncoder" as PWD_ENC
+participant "ValidationService" as VAL_SVC
+participant "NotificationService" as NOTIF_SVC
+
+== User Login Flow ==
+
+C -> CTL: POST /api/auth/login
+activate CTL
+CTL -> CTL: extract IP address, device info, user agent
+CTL -> LOG: info - auth.authenticate init
+CTL -> SVC: authenticate(loginData, ipAddress, userAgent)
+activate SVC
+
+SVC -> SVC_IMPL: authenticate(loginData, ipAddress, userAgent)
+activate SVC_IMPL
+
+SVC_IMPL -> LOG: info - auth.authenticate init
+SVC_IMPL -> SVC_IMPL: validate login credentials
+SVC_IMPL -> SVC_IMPL: check if user exists
+
+SVC_IMPL -> REPO: findByUsername(username)
+activate REPO
+REPO -> DB: SELECT * FROM users WHERE username = ?
+activate DB
+DB --> REPO: user data
+deactivate DB
+REPO --> SVC_IMPL: GMTUserEntity
+deactivate REPO
+
+alt user found
+    SVC_IMPL -> PWD_ENC: matches(password, encodedPassword)
+    activate PWD_ENC
+    PWD_ENC --> SVC_IMPL: password match result
+    deactivate PWD_ENC
+    
+    alt password correct
+        SVC_IMPL -> SVC_IMPL: check account status
+        SVC_IMPL -> SVC_IMPL: check if account is locked
+        
+        alt account active
+            SVC_IMPL -> JWT_SVC: generateAccessToken(user)
+            activate JWT_SVC
+            JWT_SVC --> SVC_IMPL: access token
+            deactivate JWT_SVC
+            
+            SVC_IMPL -> JWT_SVC: generateRefreshToken(user)
+            activate JWT_SVC
+            JWT_SVC --> SVC_IMPL: refresh token
+            deactivate JWT_SVC
+            
+            SVC_IMPL -> SVC_IMPL: update last login timestamp
+            SVC_IMPL -> SVC_IMPL: log successful login
+            
+            SVC_IMPL -> REPO: save(user)
+            activate REPO
+            REPO -> DB: UPDATE users SET last_login=?, login_count=? WHERE id=?
+            activate DB
+            DB --> REPO: updated entity
+            deactivate DB
+            REPO --> SVC_IMPL: updated user entity
+            deactivate REPO
+            
+            SVC_IMPL -> NOTIF_SVC: sendLoginNotification(user, ipAddress)
+            activate NOTIF_SVC
+            NOTIF_SVC --> SVC_IMPL: notification sent
+            deactivate NOTIF_SVC
+            
+            SVC_IMPL -> MAPPER: mapToResponse(user, accessToken, refreshToken)
+            activate MAPPER
+            MAPPER --> SVC_IMPL: GMTAuthResponseDTO
+            deactivate MAPPER
+            
+            SVC_IMPL --> SVC: GMTResponseDTO
+            deactivate SVC_IMPL
+            
+            SVC --> CTL: GMTResponseDTO
+            deactivate SVC
+            
+            CTL --> C: OK response with tokens
+        else account locked
+            SVC_IMPL -> SVC_IMPL: throw GMTCustomException - Account locked
+            SVC_IMPL --> SVC: Exception
+            deactivate SVC_IMPL
+            
+            SVC --> CTL: Exception
+            deactivate SVC
+            
+            CTL --> C: UNAUTHORIZED response
+        end
+    else password incorrect
+        SVC_IMPL -> SVC_IMPL: increment failed login attempts
+        SVC_IMPL -> SVC_IMPL: check if account should be locked
+        
+        alt should lock account
+            SVC_IMPL -> SVC_IMPL: lock account
+            SVC_IMPL -> REPO: save(user)
+            activate REPO
+            REPO -> DB: UPDATE users SET status='LOCKED', locked_at=? WHERE id=?
+            activate DB
+            DB --> REPO: updated entity
+            deactivate DB
+            REPO --> SVC_IMPL: updated user entity
+            deactivate REPO
+        end
+        
+        SVC_IMPL -> SVC_IMPL: throw GMTCustomException - Invalid credentials
+        SVC_IMPL --> SVC: Exception
+        deactivate SVC_IMPL
+        
+        SVC --> CTL: Exception
+        deactivate SVC
+        
+        CTL --> C: UNAUTHORIZED response
+    end
+else user not found
+    SVC_IMPL -> SVC_IMPL: throw GMTCustomException - User not found
+    SVC_IMPL --> SVC: Exception
+    deactivate SVC_IMPL
+    
+    SVC --> CTL: Exception
+    deactivate SVC
+    
+    CTL --> C: NOT_FOUND response
+end
+deactivate CTL
+
+== User Registration Flow ==
+
+C -> CTL: POST /api/auth/register
+activate CTL
+CTL -> CTL: extract IP address, user agent
+CTL -> LOG: info - auth.registerUser init
+CTL -> SVC: registerUser(registrationData, createdBy)
+activate SVC
+
+SVC -> SVC_IMPL: registerUser(registrationData, createdBy)
+activate SVC_IMPL
+
+SVC_IMPL -> LOG: info - auth.registerUser init
+SVC_IMPL -> SVC_IMPL: validate registration data
+SVC_IMPL -> SVC_IMPL: check if username already exists
+
+SVC_IMPL -> REPO: findByUsername(username)
+activate REPO
+REPO -> DB: SELECT * FROM users WHERE username = ?
+activate DB
+DB --> REPO: user data
+deactivate DB
+REPO --> SVC_IMPL: GMTUserEntity or null
+deactivate REPO
+
+alt username exists
+    SVC_IMPL -> SVC_IMPL: throw GMTCustomException - Username already exists
+    SVC_IMPL --> SVC: Exception
+    deactivate SVC_IMPL
+    
+    SVC --> CTL: Exception
+    deactivate SVC
+    
+    CTL --> C: CONFLICT response
+else username available
+    SVC_IMPL -> SVC_IMPL: check if email already exists
+    
+    SVC_IMPL -> REPO: findByEmail(email)
+    activate REPO
+    REPO -> DB: SELECT * FROM users WHERE email = ?
+    activate DB
+    DB --> REPO: user data
+    deactivate DB
+    REPO --> SVC_IMPL: GMTUserEntity or null
+    deactivate REPO
+    
+    alt email exists
+        SVC_IMPL -> SVC_IMPL: throw GMTCustomException - Email already exists
+        SVC_IMPL --> SVC: Exception
+        deactivate SVC_IMPL
+        
+        SVC --> CTL: Exception
+        deactivate SVC
+        
+        CTL --> C: CONFLICT response
+    else email available
+        SVC_IMPL -> SVC_IMPL: create new user entity
+        SVC_IMPL -> SVC_IMPL: set user properties
+        SVC_IMPL -> SVC_IMPL: generate user ID
+        
+        SVC_IMPL -> PWD_ENC: encode(password)
+        activate PWD_ENC
+        PWD_ENC --> SVC_IMPL: encoded password
+        deactivate PWD_ENC
+        
+        SVC_IMPL -> SVC_IMPL: set encoded password
+        SVC_IMPL -> SVC_IMPL: set account status to PENDING
+        SVC_IMPL -> SVC_IMPL: set creation timestamp
+        
+        SVC_IMPL -> REPO: save(user)
+        activate REPO
+        REPO -> DB: INSERT INTO users (...)
+        activate DB
+        DB --> REPO: saved entity
+        deactivate DB
+        REPO --> SVC_IMPL: saved user entity
+        deactivate REPO
+        
+        SVC_IMPL -> NOTIF_SVC: sendWelcomeEmail(user)
+        activate NOTIF_SVC
+        NOTIF_SVC --> SVC_IMPL: email sent
+        deactivate NOTIF_SVC
+        
+        SVC_IMPL -> LOG: info - user registered successfully
+        SVC_IMPL -> MAPPER: mapToResponse(user)
+        activate MAPPER
+        MAPPER --> SVC_IMPL: GMTUserResponseDTO
+        deactivate MAPPER
+        
+        SVC_IMPL --> SVC: GMTResponseDTO
+        deactivate SVC_IMPL
+        
+        SVC --> CTL: GMTResponseDTO
+        deactivate SVC
+        
+        CTL --> C: CREATED response
+    end
+end
+deactivate CTL
+
+== Token Refresh Flow ==
+
+C -> CTL: POST /api/auth/refresh
+activate CTL
+CTL -> LOG: info - auth.refreshToken init
+CTL -> SVC: refreshToken(refreshTokenData, req)
+activate SVC
+
+SVC -> SVC_IMPL: refreshToken(refreshTokenData, req)
+activate SVC_IMPL
+
+SVC_IMPL -> LOG: info - auth.refreshToken init
+SVC_IMPL -> SVC_IMPL: validate refresh token
+SVC_IMPL -> JWT_SVC: validateRefreshToken(refreshToken)
+activate JWT_SVC
+JWT_SVC --> SVC_IMPL: token validation result
+deactivate JWT_SVC
+
+alt token valid
+    SVC_IMPL -> JWT_SVC: extractUserFromToken(refreshToken)
+    activate JWT_SVC
+    JWT_SVC --> SVC_IMPL: user information
+    deactivate JWT_SVC
+    
+    SVC_IMPL -> REPO: findById(userId)
+    activate REPO
+    REPO -> DB: SELECT * FROM users WHERE id = ?
+    activate DB
+    DB --> REPO: user data
+    deactivate DB
+    REPO --> SVC_IMPL: GMTUserEntity
+    deactivate REPO
+    
+    alt user found
+        SVC_IMPL -> SVC_IMPL: check if user is active
+        SVC_IMPL -> SVC_IMPL: check if refresh token is not expired
+        
+        alt user active and token valid
+            SVC_IMPL -> JWT_SVC: generateNewAccessToken(user)
+            activate JWT_SVC
+            JWT_SVC --> SVC_IMPL: new access token
+            deactivate JWT_SVC
+            
+            SVC_IMPL -> JWT_SVC: generateNewRefreshToken(user)
+            activate JWT_SVC
+            JWT_SVC --> SVC_IMPL: new refresh token
+            deactivate JWT_SVC
+            
+            SVC_IMPL -> MAPPER: mapToResponse(user, newAccessToken, newRefreshToken)
+            activate MAPPER
+            MAPPER --> SVC_IMPL: GMTAuthResponseDTO
+            deactivate MAPPER
+            
+            SVC_IMPL --> SVC: GMTResponseDTO
+            deactivate SVC_IMPL
+            
+            SVC --> CTL: GMTResponseDTO
+            deactivate SVC
+            
+            CTL --> C: OK response with new tokens
+        else user inactive
+            SVC_IMPL -> SVC_IMPL: throw GMTCustomException - User account inactive
+            SVC_IMPL --> SVC: Exception
+            deactivate SVC_IMPL
+            
+            SVC --> CTL: Exception
+            deactivate SVC
+            
+            CTL --> C: UNAUTHORIZED response
+        end
+    else user not found
+        SVC_IMPL -> SVC_IMPL: throw GMTCustomException - User not found
+        SVC_IMPL --> SVC: Exception
+        deactivate SVC_IMPL
+        
+        SVC --> CTL: Exception
+        deactivate SVC
+        
+        CTL --> C: NOT_FOUND response
+    end
+else token invalid
+    SVC_IMPL -> SVC_IMPL: throw GMTCustomException - Invalid refresh token
+    SVC_IMPL --> SVC: Exception
+    deactivate SVC_IMPL
+    
+    SVC --> CTL: Exception
+    deactivate SVC
+    
+    CTL --> C: UNAUTHORIZED response
+end
+deactivate CTL
+
+== User Update Flow ==
+
+C -> CTL: PUT /api/auth/update
+activate CTL
+CTL -> LOG: info - auth.updateUser init
+CTL -> SVC: updateUser(updateData, req)
+activate SVC
+
+SVC -> SVC_IMPL: updateUser(updateData, req)
+activate SVC_IMPL
+
+SVC_IMPL -> LOG: info - auth.updateUser init
+SVC_IMPL -> SVC_IMPL: validate update data
+SVC_IMPL -> SVC_IMPL: check if user exists
+
+SVC_IMPL -> REPO: findById(userId)
+activate REPO
+REPO -> DB: SELECT * FROM users WHERE id = ?
+activate DB
+DB --> REPO: user data
+deactivate DB
+REPO --> SVC_IMPL: GMTUserEntity
+deactivate REPO
+
+alt user found
+    SVC_IMPL -> SVC_IMPL: validate update permissions
+    SVC_IMPL -> SVC_IMPL: update user properties
+    SVC_IMPL -> SVC_IMPL: set updated timestamp
+    
+    alt password changed
+        SVC_IMPL -> PWD_ENC: encode(newPassword)
+        activate PWD_ENC
+        PWD_ENC --> SVC_IMPL: encoded password
+        deactivate PWD_ENC
+        
+        SVC_IMPL -> SVC_IMPL: set encoded password
+    end
+    
+    SVC_IMPL -> REPO: save(user)
+    activate REPO
+    REPO -> DB: UPDATE users SET ... WHERE id=?
+    activate DB
+    DB --> REPO: updated entity
+    deactivate DB
+    REPO --> SVC_IMPL: updated user entity
+    deactivate REPO
+    
+    SVC_IMPL -> LOG: info - user updated successfully
+    SVC_IMPL -> MAPPER: mapToResponse(updatedUser)
+    activate MAPPER
+    MAPPER --> SVC_IMPL: GMTUserResponseDTO
+    deactivate MAPPER
+    
+    SVC_IMPL --> SVC: GMTResponseDTO
+    deactivate SVC_IMPL
+    
+    SVC --> CTL: GMTResponseDTO
+    deactivate SVC
+    
+    CTL --> C: OK response
+else user not found
+    SVC_IMPL -> SVC_IMPL: throw GMTCustomException - User not found
+    SVC_IMPL --> SVC: Exception
+    deactivate SVC_IMPL
+    
+    SVC --> CTL: Exception
+    deactivate SVC
+    
+    CTL --> C: NOT_FOUND response
+end
+deactivate CTL
+
+== Error Handling Flow ==
+
+C -> CTL: Any API call
+activate CTL
+CTL -> SVC: service method call
+activate SVC
+
+SVC -> SVC_IMPL: service implementation
+activate SVC_IMPL
+
+SVC_IMPL -> SVC_IMPL: business logic processing
+
+alt Validation Error
+    SVC_IMPL -> SVC_IMPL: throw GMTValidationException
+else Business Error
+    SVC_IMPL -> SVC_IMPL: throw GMTCustomException
+else RMI Error
+    SVC_IMPL -> SVC_IMPL: throw GMTRMIException
+else Runtime Error
+    SVC_IMPL -> SVC_IMPL: throw GMTRuntimeException
+end
+
+SVC_IMPL --> SVC: Exception
+deactivate SVC_IMPL
+
+SVC --> CTL: Exception
+deactivate SVC
+
+CTL -> LOG: error - exception details
+CTL -> CTL: create error response with appropriate HTTP status
+CTL --> C: GMTResponseDTO with error details
+deactivate CTL
+
+@enduml

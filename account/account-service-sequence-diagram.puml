@@ -1,0 +1,343 @@
+@startuml Account Service Sequence Diagram
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 20
+skinparam maxmessagesize 60
+
+title Account Service - System Architecture Sequence Diagram
+
+participant "Client" as C
+participant "GMTAccountController" as CTL
+participant "GMTAccountService" as SVC
+participant "GMTAccountServiceImple" as SVC_IMPL
+participant "GMTAccountRepository" as REPO
+participant "GMTAccountEntity" as ENTITY
+participant "Database" as DB
+participant "GMTLOGUtilities" as LOG
+participant "GMTMapper" as MAPPER
+participant "GMTHelper" as HELPER
+participant "ValidationService" as VAL_SVC
+
+== Account Creation Flow ==
+
+C -> CTL: POST /api/accounts/create
+activate CTL
+CTL -> LOG: info - account.createAccount init
+CTL -> CTL: validate request body
+CTL -> CTL: validate account name
+
+alt validation failed
+    CTL -> LOG: error - validation failed
+    CTL --> C: BAD_REQUEST response
+else validation passed
+    CTL -> SVC: createAccount(accountData, req)
+    activate SVC
+    
+    SVC -> SVC_IMPL: createAccount(accountData, req)
+    activate SVC_IMPL
+    
+    SVC_IMPL -> LOG: info - account.createAccount init
+    SVC_IMPL -> SVC_IMPL: validate account data
+    SVC_IMPL -> SVC_IMPL: generate account number
+    SVC_IMPL -> SVC_IMPL: set account properties
+    SVC_IMPL -> SVC_IMPL: set initial balance
+    SVC_IMPL -> SVC_IMPL: set account status
+    
+    SVC_IMPL -> REPO: save(account)
+    activate REPO
+    REPO -> DB: INSERT INTO account (...)
+    activate DB
+    DB --> REPO: saved entity
+    deactivate DB
+    REPO --> SVC_IMPL: saved account entity
+    deactivate REPO
+    
+    SVC_IMPL -> LOG: info - account created successfully
+    SVC_IMPL -> MAPPER: mapToResponse(savedAccount)
+    activate MAPPER
+    MAPPER --> SVC_IMPL: GMTAccountResponseDTO
+    deactivate MAPPER
+    
+    SVC_IMPL --> SVC: GMTResponseDTO
+    deactivate SVC_IMPL
+    
+    SVC --> CTL: GMTResponseDTO
+    deactivate SVC
+    
+    CTL -> LOG: info - account.createAccount end
+    CTL --> C: CREATED response
+end
+deactivate CTL
+
+== Get Account by ID Flow ==
+
+C -> CTL: GET /api/accounts/id/{id}
+activate CTL
+CTL -> LOG: info - account.getAccountById init
+CTL -> SVC: getAccountById(id)
+activate SVC
+
+SVC -> SVC_IMPL: getAccountById(id)
+activate SVC_IMPL
+
+SVC_IMPL -> REPO: findById(id)
+activate REPO
+REPO -> DB: SELECT * FROM account WHERE id = ?
+activate DB
+DB --> REPO: account data
+deactivate DB
+REPO --> SVC_IMPL: GMTAccountEntity
+deactivate REPO
+
+alt account found
+    SVC_IMPL -> MAPPER: mapToResponse(account)
+    activate MAPPER
+    MAPPER --> SVC_IMPL: GMTAccountResponseDTO
+    deactivate MAPPER
+    
+    SVC_IMPL --> SVC: GMTResponseDTO
+    deactivate SVC_IMPL
+    
+    SVC --> CTL: GMTResponseDTO
+    deactivate SVC
+    
+    CTL --> C: OK response
+else account not found
+    SVC_IMPL -> SVC_IMPL: throw GMTCustomException
+    SVC_IMPL --> SVC: Exception
+    deactivate SVC_IMPL
+    
+    SVC --> CTL: Exception
+    deactivate SVC
+    
+    CTL --> C: NOT_FOUND response
+end
+deactivate CTL
+
+== Get Account by Account Number Flow ==
+
+C -> CTL: GET /api/accounts/account-number/{accountNumber}
+activate CTL
+CTL -> LOG: info - account.getAccountByAccountNumber init
+CTL -> SVC: getAccountByAccountNumber(accountNumber)
+activate SVC
+
+SVC -> SVC_IMPL: getAccountByAccountNumber(accountNumber)
+activate SVC_IMPL
+
+SVC_IMPL -> REPO: findByAccountNumber(accountNumber)
+activate REPO
+REPO -> DB: SELECT * FROM account WHERE account_number = ?
+activate DB
+DB --> REPO: account data
+deactivate DB
+REPO --> SVC_IMPL: GMTAccountEntity
+deactivate REPO
+
+SVC_IMPL -> MAPPER: mapToResponse(account)
+activate MAPPER
+MAPPER --> SVC_IMPL: GMTAccountResponseDTO
+deactivate MAPPER
+
+SVC_IMPL --> SVC: GMTResponseDTO
+deactivate SVC_IMPL
+
+SVC --> CTL: GMTResponseDTO
+deactivate SVC
+
+CTL --> C: OK response
+deactivate CTL
+
+== Update Account Balance Flow ==
+
+C -> CTL: PUT /api/accounts/balance
+activate CTL
+CTL -> LOG: info - account.updateBalance init
+CTL -> SVC: updateBalance(balanceData, req)
+activate SVC
+
+SVC -> SVC_IMPL: updateBalance(balanceData, req)
+activate SVC_IMPL
+
+SVC_IMPL -> LOG: info - account.updateBalance init
+SVC_IMPL -> SVC_IMPL: validate balance data
+SVC_IMPL -> SVC_IMPL: check account exists
+
+SVC_IMPL -> REPO: findByAccountNumber(accountNumber)
+activate REPO
+REPO -> DB: SELECT * FROM account WHERE account_number = ?
+activate DB
+DB --> REPO: account data
+deactivate DB
+REPO --> SVC_IMPL: GMTAccountEntity
+deactivate REPO
+
+alt account found
+    SVC_IMPL -> SVC_IMPL: validate balance change
+    SVC_IMPL -> SVC_IMPL: update account balance
+    SVC_IMPL -> SVC_IMPL: set updated timestamp
+    
+    SVC_IMPL -> REPO: save(account)
+    activate REPO
+    REPO -> DB: UPDATE account SET balance=?, updated_at=? WHERE id=?
+    activate DB
+    DB --> REPO: updated entity
+    deactivate DB
+    REPO --> SVC_IMPL: updated account entity
+    deactivate REPO
+    
+    SVC_IMPL -> LOG: info - balance updated successfully
+    SVC_IMPL -> MAPPER: mapToResponse(updatedAccount)
+    activate MAPPER
+    MAPPER --> SVC_IMPL: GMTAccountResponseDTO
+    deactivate MAPPER
+    
+    SVC_IMPL --> SVC: GMTResponseDTO
+    deactivate SVC_IMPL
+    
+    SVC --> CTL: GMTResponseDTO
+    deactivate SVC
+    
+    CTL --> C: OK response
+else account not found
+    SVC_IMPL -> SVC_IMPL: throw GMTCustomException
+    SVC_IMPL --> SVC: Exception
+    deactivate SVC_IMPL
+    
+    SVC --> CTL: Exception
+    deactivate SVC
+    
+    CTL --> C: NOT_FOUND response
+end
+deactivate CTL
+
+== Get All Accounts Flow ==
+
+C -> CTL: GET /api/accounts/all?page={page}&size={size}
+activate CTL
+CTL -> LOG: info - account.getAllAccounts init
+CTL -> SVC: getAllAccounts(page, size)
+activate SVC
+
+SVC -> SVC_IMPL: getAllAccounts(page, size)
+activate SVC_IMPL
+
+SVC_IMPL -> REPO: findAll(PageRequest.of(page, size))
+activate REPO
+REPO -> DB: SELECT * FROM account LIMIT ? OFFSET ?
+activate DB
+DB --> REPO: list of accounts
+deactivate DB
+REPO --> SVC_IMPL: Page<GMTAccountEntity>
+deactivate REPO
+
+SVC_IMPL -> MAPPER: mapToResponse(accounts)
+activate MAPPER
+MAPPER --> SVC_IMPL: List<GMTAccountResponseDTO>
+deactivate MAPPER
+
+SVC_IMPL --> SVC: GMTResponseDTO
+deactivate SVC_IMPL
+
+SVC --> CTL: GMTResponseDTO
+deactivate SVC
+
+CTL --> C: OK response
+deactivate CTL
+
+== Account Status Update Flow ==
+
+C -> CTL: PUT /api/accounts/status
+activate CTL
+CTL -> LOG: info - account.updateStatus init
+CTL -> SVC: updateAccountStatus(statusData, req)
+activate SVC
+
+SVC -> SVC_IMPL: updateAccountStatus(statusData, req)
+activate SVC_IMPL
+
+SVC_IMPL -> LOG: info - account.updateStatus init
+SVC_IMPL -> SVC_IMPL: validate status data
+SVC_IMPL -> SVC_IMPL: check account exists
+
+SVC_IMPL -> REPO: findByAccountNumber(accountNumber)
+activate REPO
+REPO -> DB: SELECT * FROM account WHERE account_number = ?
+activate DB
+DB --> REPO: account data
+deactivate DB
+REPO --> SVC_IMPL: GMTAccountEntity
+deactivate REPO
+
+alt account found
+    SVC_IMPL -> SVC_IMPL: validate status change
+    SVC_IMPL -> SVC_IMPL: update account status
+    SVC_IMPL -> SVC_IMPL: set updated timestamp
+    
+    SVC_IMPL -> REPO: save(account)
+    activate REPO
+    REPO -> DB: UPDATE account SET status=?, updated_at=? WHERE id=?
+    activate DB
+    DB --> REPO: updated entity
+    deactivate DB
+    REPO --> SVC_IMPL: updated account entity
+    deactivate REPO
+    
+    SVC_IMPL -> LOG: info - status updated successfully
+    SVC_IMPL -> MAPPER: mapToResponse(updatedAccount)
+    activate MAPPER
+    MAPPER --> SVC_IMPL: GMTAccountResponseDTO
+    deactivate MAPPER
+    
+    SVC_IMPL --> SVC: GMTResponseDTO
+    deactivate SVC_IMPL
+    
+    SVC --> CTL: GMTResponseDTO
+    deactivate SVC
+    
+    CTL --> C: OK response
+else account not found
+    SVC_IMPL -> SVC_IMPL: throw GMTCustomException
+    SVC_IMPL --> SVC: Exception
+    deactivate SVC_IMPL
+    
+    SVC --> CTL: Exception
+    deactivate SVC
+    
+    CTL --> C: NOT_FOUND response
+end
+deactivate CTL
+
+== Error Handling Flow ==
+
+C -> CTL: Any API call
+activate CTL
+CTL -> SVC: service method call
+activate SVC
+
+SVC -> SVC_IMPL: service implementation
+activate SVC_IMPL
+
+SVC_IMPL -> SVC_IMPL: business logic processing
+
+alt Validation Error
+    SVC_IMPL -> SVC_IMPL: throw GMTValidationException
+else Business Error
+    SVC_IMPL -> SVC_IMPL: throw GMTCustomException
+else Runtime Error
+    SVC_IMPL -> SVC_IMPL: throw GMTRuntimeException
+end
+
+SVC_IMPL --> SVC: Exception
+deactivate SVC_IMPL
+
+SVC --> CTL: Exception
+deactivate SVC
+
+CTL -> LOG: error - exception details
+CTL -> CTL: create error response with appropriate HTTP status
+CTL --> C: GMTResponseDTO with error details
+deactivate CTL
+
+@enduml

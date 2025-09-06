@@ -35,7 +35,7 @@ public class GMTUserEntity implements GMTGeneralDTO {
     private String passwordHash;
 
     @Column(name = "first_name", nullable = false, length = 50)
-    private String firstName;
+    private String firstName;   
 
     @Column(name = "last_name", nullable = false, length = 50)
     private String lastName;

@@ -136,7 +136,6 @@ public class GMTAuthServiceImpl implements GMTAuthService {
     @Override
     public GMTResponseDTO logout(String token) throws GMTCustomException {
         GMTLOGUtilities.info(GMTLog.AUTH.getValue(), "[service][auth.logout][init]");
-
         try {
             Optional<GMTTokenEntity> optionalToken = tokenRepository.findByTokenValue(token);
             if (optionalToken.isEmpty()) {
@@ -203,7 +202,7 @@ public class GMTAuthServiceImpl implements GMTAuthService {
             if (response == null) {
                 throw new GMTCustomException("Хэрэглэгч бүртгэгдсэнгүй");
             }
-            GMTLOGUtilities.info(GMTLog.AUTH.getValue(), "[service][auth.registerUser][" + savedUser.getUsername().toLowerCase() + "][end]");
+            GMTLOGUtilities.info(GMTLog.AUTH.getValue(), "[service][auth.registerUser][" + savedUser.getUsername() + "][end]");
             GMTResponse gmtResponse = new GMTResponse(HttpStatus.CREATED.value(), "Амжилттай бүртгүүллээ...", response);
             GMTResponseDTO responseDTO = gmtResponse.getResponseDTO();
             return responseDTO;
@@ -232,7 +231,6 @@ public class GMTAuthServiceImpl implements GMTAuthService {
             if (optionalUser.isEmpty()) {
                 return new GMTResponse(HttpStatus.NOT_FOUND.value(), "Хэрэглэгч олдсонгүй", (GMTGeneralDTO) null).getResponseDTO();
             }
-
             GMTUserEntity user = optionalUser.get();
             user.setIsActive(false);
             user.setUserStatus(GMTUserStatus.DELETED.toString());

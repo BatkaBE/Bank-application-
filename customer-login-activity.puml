@@ -1,0 +1,70 @@
+@startuml Customer Login Activity
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam activity {
+    BackgroundColor #FEFEFE
+    BorderColor #000000
+    FontColor #000000
+}
+
+title Customer Login Process\nХэрэглэгчийн нэвтрэх үйл явц
+
+start
+:Enter Credentials\n(Нэвтрэх мэдээлэл оруулах)
+**Email/Password**;
+
+:Validate Input Format\n(Оруулсан мэдээллийн формат шалгах);
+if (Format Valid?) then (Yes)
+  :Authenticate User\n(Хэрэглэгчийг баталгаажуулах);
+  if (Credentials Valid?) then (Yes)
+    :Generate JWT Token\n(JWT токен үүсгэх);
+    :Create Session\n(Session үүсгэх);
+    :Update Last Login\n(Сүүлийн нэвтрэлтийг шинэчлэх);
+    :Log Successful Login\n(Амжилттай нэвтрэлтийг бүртгэх);
+    :Redirect to Dashboard\n(Дашбоард руу шилжүүлэх);
+    stop
+  else (No)
+    :Increment Failed Attempts\n(Буруу оролдлогын тоо нэмэх);
+    :Log Failed Attempt\n(Буруу оролдлогыг бүртгэх);
+    if (Attempts >= 5?) then (Yes)
+      :Lock Account Temporarily\n(Дансыг түр хаах);
+      :Send Security Alert\n(Аюулгүй байдлын анхааруулга илгээх);
+      :Log Account Lock\n(Данс хаагдсаныг бүртгэх);
+      stop
+    else (No)
+      :Show Error Message\n(Алдааны мэдээлэл харуулах);
+      note right
+        "Invalid credentials.
+        Attempts remaining: {5 - attempts}"
+      end note
+      :Return to Login Form\n(Нэвтрэх маягт руу буцах);
+      detach
+    endif
+  endif
+else (No)
+  :Show Format Error\n(Форматын алдаа харуулах);
+  note right
+    Email format: user@domain.com
+    Password: 8+ characters required
+  end note
+  :Return to Login Form\n(Нэвтрэх маягт руу буцах);
+  detach
+endif
+
+note as N1
+  <b>Security Measures:</b>
+  - Account lock after 5 failed attempts
+  - Lock duration: 30 minutes
+  - Security alert sent to registered email
+  - Failed attempts logged for audit
+end note
+
+note as N2
+  <b>Session Management:</b>
+  - JWT token expires in 15 minutes
+  - Refresh token expires in 24 hours
+  - Concurrent sessions allowed: 3
+  - Session timeout: 30 minutes idle
+end note
+
+@enduml

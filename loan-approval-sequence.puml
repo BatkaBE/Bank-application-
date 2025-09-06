@@ -1,0 +1,107 @@
+@startuml Loan Approval Sequence
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam sequenceParticipant underline
+
+title Loan Approval Process\nЗээлийн баталгаажуулалтын үйл явц
+
+actor "Customer\nХэрэглэгч" as CU
+participant "Frontend\nВеб интерфэйс" as FE
+participant "Loan Service\nЗээлийн үйлчилгээ" as LS
+participant "Account Service\nДансны үйлчилгээ" as AS
+participant "Risk Assessment\nЭрсдэлийн үнэлгээ" as RA
+participant "Bank Officer\nБанкны ажилтан" as BO
+participant "Notification Service\nМэдэгдлийн үйлчилгээ" as NS
+participant "Database\nӨгөгдлийн сан" as DB
+
+== Loan Application ==
+CU -> FE: Fill loan application form\n(Зээлийн хүсэлтийн маягт бөглөх)
+activate FE
+FE -> LS: POST /api/v1/loans/apply\n(Зээлийн хүсэлт илгээх)
+activate LS
+LS -> AS: GET customer accounts\n(Хэрэглэгчийн дансны мэдээлэл авах)
+activate AS
+AS -> DB: Query account details\n(Дансны дэлгэрэнгүй мэдээлэл авах)
+activate DB
+DB --> AS: Account information\n(Дансны мэдээлэл)
+deactivate DB
+AS --> LS: Account data returned\n(Дансны өгөгдөл буцааж өгөх)
+deactivate AS
+
+LS -> RA: Assess credit risk\n(Зээлийн эрсдэл үнэлэх)
+activate RA
+RA -> RA: Calculate credit score\n(Зээлийн оноо бодох)
+RA -> RA: Check loan eligibility\n(Зээлийн боломж шалгах)
+RA --> LS: Risk assessment result\n(Эрсдэлийн үнэлгээний үр дүн)
+deactivate RA
+
+LS -> DB: Save loan application\n(Зээлийн хүсэлт хадгалах)
+activate DB
+DB --> LS: Application saved\n(Хүсэлт хадгалагдлаа)
+deactivate DB
+
+LS -> NS: Notify bank officer\n(Банкны ажилтанд мэдэгдэх)
+activate NS
+NS --> LS: Notification sent\n(Мэдэгдэл илгээгдлээ)
+deactivate NS
+LS --> FE: Application submitted\n(Хүсэлт хүлээн авлаа)
+deactivate LS
+FE --> CU: Show confirmation\n(Баталгаажуулалт харуулах)
+deactivate FE
+
+== Manual Review Process ==
+BO -> FE: Access pending applications\n(Хүлээгдэж буй хүсэлтүүдэд хандах)
+activate FE
+FE -> LS: GET /api/v1/loans/pending\n(Хүлээгдэж буй зээлүүд авах)
+activate LS
+LS -> DB: Query pending loans\n(Хүлээгдэж буй зээл авах)
+activate DB
+DB --> LS: Pending applications\n(Хүлээгдэж буй хүсэлтүүд)
+deactivate DB
+LS --> FE: Applications list\n(Хүсэлтүүдийн жагсаалт)
+deactivate LS
+FE --> BO: Display applications\n(Хүсэлтүүд харуулах)
+deactivate FE
+
+BO -> FE: Review application details\n(Хүсэлтийн дэлгэрэнгүйг харах)
+activate FE
+FE -> LS: GET /api/v1/loans/{id}\n(Зээлийн дэлгэрэнгүй авах)
+activate LS
+LS -> DB: Query loan details\n(Зээлийн дэлгэрэнгүй авах)
+activate DB
+DB --> LS: Loan information\n(Зээлийн мэдээлэл)
+deactivate DB
+LS --> FE: Loan details\n(Зээлийн дэлгэрэнгүй)
+deactivate LS
+FE --> BO: Show loan details\n(Зээлийн дэлгэрэнгүй харуулах)
+deactivate FE
+
+== Approval Decision ==
+BO -> FE: Make approval decision\n(Батлах шийдвэр гаргах)
+activate FE
+FE -> LS: PUT /api/v1/loans/{id}/approve\n(Зээл батлах)
+activate LS
+LS -> DB: Update loan status\n(Зээлийн төлөв шинэчлэх)
+activate DB
+DB --> LS: Status updated\n(Төлөв шинэчлэгдлээ)
+deactivate DB
+LS -> NS: Send approval notification\n(Батлагдсан мэдэгдэл илгээх)
+activate NS
+NS --> LS: Notification sent\n(Мэдэгдэл илгээгдлээ)
+deactivate NS
+LS --> FE: Loan approved\n(Зээл батлагдлаа)
+deactivate LS
+FE --> BO: Show success message\n(Амжилтын мэдээлэл харуулах)
+deactivate FE
+
+NS -> CU: Send approval email/SMS\n(Батлагдсан имэйл/СМС илгээх)
+
+note over CU, DB
+  <b>Business Rules:</b>
+  - Credit score > 650 required
+  - Maximum loan amount based on income
+  - Manual review for loans > 10M MNT
+  - Approval notification within 24 hours
+end note
+
+@enduml
